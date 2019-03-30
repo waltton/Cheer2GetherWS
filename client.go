@@ -6,6 +6,9 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -46,6 +49,8 @@ type Client struct {
 
 	// Buffered channel of outbound messages.
 	send chan []byte
+
+	db *sql.DB
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -70,6 +75,9 @@ func (c *Client) readPump() {
 			break
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
+
+		go c.saveMessage(message)
+
 		c.hub.broadcast <- message
 	}
 }
@@ -127,11 +135,53 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), db: hub.db}
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
 	go client.writePump()
 	go client.readPump()
+}
+
+// Message is the base type for messages in the system
+type Message struct {
+	Type string `json:"type"`
+}
+
+// GroupMessage from user to a group
+type GroupMessage struct {
+	Message
+	Group   int    `json:"group"`
+	User    int    `json:"user"`
+	Content string `json:"content"`
+}
+
+func (c *Client) saveMessage(message []byte) {
+	m := &Message{}
+
+	err := json.Unmarshal(message, m)
+	if err != nil {
+		fmt.Println("err", err)
+		return
+	}
+
+	if m.Type == "group" {
+		gm := &GroupMessage{}
+		err := json.Unmarshal(message, gm)
+		if err != nil {
+			fmt.Println("err", err)
+			return
+		}
+
+		_, err = c.db.Exec(`
+			INSERT INTO core_groupmessage(user_id, group_id, message, created_at)
+			SELECT $1, $2, $3, NOW()
+		`, gm.User, gm.Group, gm.Content)
+
+		if err != nil {
+			fmt.Println("err", err)
+			return
+		}
+	}
 }

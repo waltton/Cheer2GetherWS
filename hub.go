@@ -4,6 +4,8 @@
 
 package main
 
+import "database/sql"
+
 // Hub maintains the set of active clients and broadcasts messages to the
 // clients.
 type Hub struct {
@@ -18,14 +20,17 @@ type Hub struct {
 
 	// Unregister requests from clients.
 	unregister chan *Client
+
+	db *sql.DB
 }
 
-func newHub() *Hub {
+func newHub(db *sql.DB) *Hub {
 	return &Hub{
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		clients:    make(map[*Client]bool),
+		db:         db,
 	}
 }
 

@@ -5,10 +5,14 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+
+	_ "github.com/lib/pq"
 )
 
 var addr = flag.String("addr", ":8080", "http service address")
@@ -30,7 +34,23 @@ func main() {
 	fmt.Println("running...")
 	flag.Parse()
 
-	hub := newHub()
+	strConn := fmt.Sprintf(
+		"user=%s dbname=%s password=%s host=%s port=%s",
+		os.Getenv("C2G_DB_USER"),
+		os.Getenv("C2G_DB_NAME"),
+		os.Getenv("C2G_DB_PASSWORD"),
+		os.Getenv("C2G_DB_HOST"),
+		os.Getenv("C2G_DB_PORT"),
+	)
+
+	db, err := sql.Open("postgres", strConn)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer db.Close()
+
+	hub := newHub(db)
 
 	go hub.run()
 
@@ -39,7 +59,7 @@ func main() {
 		serveWs(hub, w, r)
 	})
 
-	err := http.ListenAndServe(*addr, nil)
+	err = http.ListenAndServe(*addr, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
