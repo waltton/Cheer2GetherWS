@@ -13,6 +13,8 @@ import (
 	"os"
 
 	_ "github.com/lib/pq"
+
+	"github.com/rs/cors"
 )
 
 var addr = flag.String("addr", "0.0.0.0:80", "http service address")
@@ -54,12 +56,16 @@ func main() {
 
 	go hub.run()
 
-	http.HandleFunc("/", serveHome)
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", serveHome)
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		serveWs(hub, w, r)
 	})
+	handler := cors.Default().Handler(mux)
 
-	err = http.ListenAndServe(*addr, nil)
+	err = http.ListenAndServe(*addr, handler)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}

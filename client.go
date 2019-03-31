@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -35,9 +34,14 @@ var (
 	space   = []byte{' '}
 )
 
+func checkOrigin(r *http.Request) bool {
+	return true
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	CheckOrigin:     checkOrigin,
 }
 
 // Client is a middleman between the websocket connection and the hub.
@@ -158,30 +162,15 @@ type GroupMessage struct {
 }
 
 func (c *Client) saveMessage(message []byte) {
-	m := &Message{}
+	fmt.Println("message", string(message))
 
-	err := json.Unmarshal(message, m)
+	_, err := c.db.Exec(`
+		INSERT INTO core_websocketmessages(data, created_at)
+		SELECT $1, NOW()
+	`, message)
+
 	if err != nil {
 		fmt.Println("err", err)
 		return
-	}
-
-	if m.Type == "group" {
-		gm := &GroupMessage{}
-		err := json.Unmarshal(message, gm)
-		if err != nil {
-			fmt.Println("err", err)
-			return
-		}
-
-		_, err = c.db.Exec(`
-			INSERT INTO core_groupmessage(user_id, group_id, message, created_at)
-			SELECT $1, $2, $3, NOW()
-		`, gm.User, gm.Group, gm.Content)
-
-		if err != nil {
-			fmt.Println("err", err)
-			return
-		}
 	}
 }
