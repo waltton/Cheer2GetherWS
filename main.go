@@ -15,7 +15,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var addr = flag.String("addr", ":8080", "http service address")
+var addr = flag.String("addr", "0.0.0.0:80", "http service address")
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL)
